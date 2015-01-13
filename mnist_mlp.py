@@ -1,6 +1,22 @@
 __author__ = 'serdyuk'
 
 import numpy as np
+from itertools import tee, izip
+
+
+def sigma(x):
+    return 1. / (1. + np.exp(-x))
+
+
+def softmax(x):
+    return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+
+def pairwise(iterable):
+    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
+    a, b = tee(iterable)
+    next(b, None)
+    return izip(a, b)
 
 
 def main():
@@ -33,14 +49,29 @@ def test(data, labels, model, **kwargs):
     pass
 
 
-def forward_prop(data, model):
+def init_model(num_feat, layer_sizes, num_out, seed=1):
+    model = []
+    rng = np.random.RandomState(seed)
+    layer_sizes = [num_feat] + layer_sizes + [num_out]
+    for size in pairwise(layer_sizes):
+        rng.normal(scale=0.1, size=size)
+    return model
+
+
+def forward_prop(batch, model):
     """
     Performs forward propagation and returns the last layer values
-    :param data: Batch of data
+    :param batch: Batch of data
     :param model: Model to use as described in `train`
     :return: List of outputs for each data point from `data`
     """
-    pass
+    outputs = []
+    hidden = batch
+    for W, b in model[:-1]:
+        hidden = sigma(W.dot(hidden.T) + b)
+    V, c = model[-1]
+    outputs += softmax(V.dot(hidden.T) + c)
+    return outputs
 
 
 def backward_prop(data, labels, model):
