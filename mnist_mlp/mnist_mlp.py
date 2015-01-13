@@ -67,24 +67,30 @@ def forward_prop(batch, model):
     :param model: Model to use as described in `train`
     :return: List of outputs for each data point from `data`
     """
-    outputs = []
     hidden = batch.T
+    hiddens = []
     for W, b in model[:-1]:
         hidden = sigma(W.T.dot(hidden) + b[:, None])
+        hiddens += [hidden.copy()]
     V, c = model[-1]
-    outputs += softmax(V.T.dot(hidden) + c[:, None])
-    return outputs
+    outputs = softmax(V.T.dot(hidden) + c[:, None])
+    return outputs, hiddens
 
 
-def backward_prop(data, labels, model):
+def backward_prop(data, labels, model, hiddens, outputs):
     """
     Performs backprop
     :param data: Batch of data
     :param labels: Labels for batch of data
     :param model: Model as described in `train`
+    :param hiddens: Hidden variable values from forward propagation
+    :param outputs: Outputs from forward propagation
     :return:
     """
-    pass
+    loss = (labels * outputs.T).sum(axis=1)
+
+    
+    return loss
 
 if __name__ == '__main__':
     main()
