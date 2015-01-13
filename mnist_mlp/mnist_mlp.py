@@ -2,6 +2,19 @@ __author__ = 'serdyuk'
 
 import numpy as np
 from itertools import tee, izip
+import cPickle as pkl
+import argparse
+import time
+
+
+def timing(f):
+    def wrap(*args):
+        time1 = time.time()
+        ret = f(*args)
+        time2 = time.time()
+        print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
+        return ret
+    return wrap
 
 
 def sigma(x):
@@ -19,14 +32,16 @@ def pairwise(iterable):
     return izip(a, b)
 
 
-def main():
-    data = None
-    labels = None
-    model = train(data, labels)
-    test(data, labels, model)
-    pass
+def main(filename, num_feat, num_layers, **kwargs):
+    train_data, valid_data, test_data = load_data(filename)
+
+    data, labels = train_data
+
+    model = train(data, labels, num_feat=num_feat, num_layers=num_layers)
+    print test(data, labels, model)
 
 
+@timing
 def train(data, labels, **kwargs):
     """
     Trains model
@@ -92,5 +107,25 @@ def backward_prop(data, labels, model, hiddens, outputs):
     
     return loss
 
+def load_data(filename):
+    with open(filename, 'r') as fin:
+        datasets = pkl.load(fin)
+    return datasets
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Run MLP on MNIST')
+    parser.add_argument('filename',
+                        default='/data/lisa/data/mnist/mnist.pkl',
+                        help='File which contains pickled dataset')
+    parser.add_argument('num_feat', type=int,
+                        default=784,
+                        help='Number of input features')
+    parser.add_argument('num_layers', type=int,
+                        default=5,
+                        help='Number of layers of MLP')
+    return parser.parse_args()
+
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(**args.__dict__)
