@@ -54,7 +54,9 @@ def init_model(num_feat, layer_sizes, num_out, seed=1):
     rng = np.random.RandomState(seed)
     layer_sizes = [num_feat] + layer_sizes + [num_out]
     for size in pairwise(layer_sizes):
-        rng.normal(scale=0.1, size=size)
+        W = rng.normal(scale=0.1, size=size)
+        b = rng.normal(scale=0.1, size=size[1])
+        model += [(W, b)]
     return model
 
 
@@ -66,11 +68,11 @@ def forward_prop(batch, model):
     :return: List of outputs for each data point from `data`
     """
     outputs = []
-    hidden = batch
+    hidden = batch.T
     for W, b in model[:-1]:
-        hidden = sigma(W.dot(hidden.T) + b)
+        hidden = sigma(W.T.dot(hidden) + b[:, None])
     V, c = model[-1]
-    outputs += softmax(V.dot(hidden.T) + c)
+    outputs += softmax(V.T.dot(hidden) + c[:, None])
     return outputs
 
 
