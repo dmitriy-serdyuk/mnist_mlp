@@ -50,8 +50,10 @@ def test_backprop():
     label = np.zeros((batch_size, out_size))
     label[:, 0] = 1.
 
-    ans = backward_prop(batch, label, model, hiddens, output)
-    assert ans.shape == (batch_size,)
+    loss, diffs = backward_prop(batch, label, model, hiddens, output)
+    assert loss.shape == (batch_size,)
+    print loss
+    assert False
 
 
 def test_backprop_batch():

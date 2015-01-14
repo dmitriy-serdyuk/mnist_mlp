@@ -90,29 +90,50 @@ def forward_prop(batch, model):
         hidden = sigma(value).T
         values += [value.copy()]
     V, c = model[-1]
-    value = V.dot(hidden.T) + c
-    outputs = softmax(value)
-    values += [value.copy()]
+    outputs = softmax(V.dot(hidden.T) + c)
+    values += [outputs.copy()]
     return outputs, values
 
 
 def backward_prop(data, labels, model, values, outputs):
     """
     Performs backprop
-    :param data: Batch of data
+    :param data: Batch of data (batch_index, data_index)
     :param labels: Labels for batch of data
     :param model: Model as described in `train`
     :param values: Hidden variable values from forward propagation
     :param outputs: Outputs from forward propagation
-    :return:
+    :return: Loss and all derivatives
     """
-    loss = (labels * outputs.T).sum(axis=1)
+    diffs = []
+    loss = (labels * outputs.T).sum()
 
-    err = -labels.dot(1. / outputs)
+    # matrix (batch_index, output_index)
+    err = -labels * (1. / outputs)
 
-    err * (outputs - outputs.dot(outputs.T))
+    # tensor (batch, output, output2)
+    err = err * (outputs[:, :, None] - outputs[:, :, None]
+                 * (outputs[:, None, :]))
+    err = err.sum(axis=1)
+    c_diff = err.sum(axis=0)
+    v_diff = (err[:, :, None] * values[-1][:, None, :]).sum(axis=0)
+    diffs += [(v_diff, c_diff)]
 
-    return loss
+    err = (err[:, :, None] * model[-1][0][None, :, :]).sum(axis=1)
+
+    for i, (W, b) in enumerate(reversed(model[:-1])):
+        val = values[-i - 1]
+        if i + 2 <= len(values):
+            prev_val = values[-i - 2]
+        else:
+            prev_val = data
+        err = (err * val * (np.ones_like(val) - val))
+        w_diff = (err[:, :, None] * prev_val[:, None, :]).sum(axis=0)
+        b_diff = err.sum(axis=1)
+        diffs += [(w_diff, b_diff)]
+        err = (err[:, :, None] * W[None, :, :]).sum(axis=1)
+
+    return loss, reversed(diffs)
 
 
 def one_hot(data, out_size):
