@@ -69,8 +69,8 @@ def init_model(num_feat, layer_sizes, num_out, seed=1):
     rng = np.random.RandomState(seed)
     layer_sizes = [num_feat] + layer_sizes + [num_out]
     for size in pairwise(layer_sizes):
-        W = rng.normal(scale=0.1, size=size)
-        b = rng.normal(scale=0.1, size=size[1])
+        W = rng.normal(scale=0.1, size=size).T
+        b = rng.normal(scale=0.1, size=(size[1], 1))
         model += [(W, b)]
     return model
 
@@ -80,36 +80,55 @@ def forward_prop(batch, model):
     Performs forward propagation and returns the last layer values
     :param batch: Batch of data
     :param model: Model to use as described in `train`
-    :return: List of outputs for each data point from `data`
+    :return: List of outputs for each data point from `data` and values
+             obtained
     """
-    hidden = batch.T
-    hiddens = []
+    hidden = batch
+    values = []
     for W, b in model[:-1]:
-        hidden = sigma(W.T.dot(hidden) + b[:, None])
-        hiddens += [hidden.copy()]
+        value = W.dot(hidden.T) + b
+        hidden = sigma(value).T
+        values += [value.copy()]
     V, c = model[-1]
-    outputs = softmax(V.T.dot(hidden) + c[:, None])
-    return outputs, hiddens
+    value = V.dot(hidden.T) + c
+    outputs = softmax(value)
+    values += [value.copy()]
+    return outputs, values
 
 
-def backward_prop(data, labels, model, hiddens, outputs):
+def backward_prop(data, labels, model, values, outputs):
     """
     Performs backprop
     :param data: Batch of data
     :param labels: Labels for batch of data
     :param model: Model as described in `train`
-    :param hiddens: Hidden variable values from forward propagation
+    :param values: Hidden variable values from forward propagation
     :param outputs: Outputs from forward propagation
     :return:
     """
     loss = (labels * outputs.T).sum(axis=1)
 
-    
+    err = -labels.dot(1. / outputs)
+
+    err * (outputs - outputs.dot(outputs.T))
+
     return loss
 
-def load_data(filename):
+
+def one_hot(data, out_size):
+    out = np.zeros((len(data), out_size))
+    out[(xrange(len(data)), data)] = 1.
+    return out
+
+
+def load_data(filename, out_size):
+    datasets = []
     with open(filename, 'r') as fin:
-        datasets = pkl.load(fin)
+        data = pkl.load(fin)
+    for dataset in data:
+        features, labels = dataset
+        datasets += [[features, one_hot(labels, out_size)]]
+
     return datasets
 
 
@@ -124,6 +143,9 @@ def parse_args():
     parser.add_argument('num_layers', type=int,
                         default=5,
                         help='Number of layers of MLP')
+    parser.add_argument('out_size', type=int,
+                        default=10,
+                        help='Size of output layer')
     return parser.parse_args()
 
 if __name__ == '__main__':
