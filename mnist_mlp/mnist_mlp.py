@@ -96,10 +96,18 @@ def test(data, labels, model, **kwargs):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Run MLP on MNIST')
+    parser = argparse.ArgumentParser(
+        description='Run MLP for classification')
     parser.add_argument('--filename',
                         default='/data/lisa/data/mnist/mnist.pkl.gz',
-                        help='File which contains pickled dataset')
+                        help='File which contains pickled dataset'
+                             ''
+                             'It should have the following structure:'
+                             'a thee element tuple (train dataset, validation'
+                             'dataset, testing dataset) and which dataset is'
+                             'a pair of numpy arrays containing features and '
+                             'labels. The numpy arrays have dimensionality '
+                             '(number of data points, point dimensionality)')
     parser.add_argument('--num_feat', type=int,
                         default=784,
                         help='Number of input features')
