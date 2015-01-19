@@ -10,8 +10,7 @@ from dataset import load_data
 from mlp import forward_prop, backward_prop, init_model
 
 
-def main(filename, num_feat, num_layers, out_size, batch_size, n_epochs,
-         **kwargs):
+def main(filename, out_size, batch_size, **kwargs):
     train_data, valid_data, test_data = load_data(filename, out_size,
                                                   batch_size)
 
@@ -20,9 +19,8 @@ def main(filename, num_feat, num_layers, out_size, batch_size, n_epochs,
     test_data, test_labels = test_data
 
     rng = np.random.RandomState(1)
-    model = train(train_data, train_labels, valid_data, valid_labels,
-                  n_epochs, learn_rate=1e-2, rng=rng, num_feat=num_feat,
-                  num_layers=num_layers)
+    model = train(train_data, train_labels, valid_data, valid_labels, rng=rng,
+                  **kwargs)
     with open('model.pkl', 'w') as fout:
         pkl.dump(model, fout)
 
@@ -44,9 +42,14 @@ def train(data, labels, valid_data, valid_labels, n_epochs,
     out_size = labels.shape[2]
     if rng is None:
         rng = np.random.RandomState(1)
-    print '.. model initialization'
-    model = init_model(inp_size, [n_hiddens] * num_layers, out_size,
-                       rng=rng)
+    if 'model_file' in kwargs:
+        print '.. loading model'
+        with open(kwargs['model_file'], 'r') as fin:
+            model = pkl.load(fin)
+    else:
+        print '.. model initialization'
+        model = init_model(inp_size, [n_hiddens] * num_layers, out_size,
+                           rng=rng)
 
     print '.. starting training'
     for epoch in xrange(n_epochs):
@@ -66,6 +69,9 @@ def train(data, labels, valid_data, valid_labels, n_epochs,
         valid_loss /= valid_data.shape[0]
         print '.... epoch', epoch, 'validation loss', valid_loss, \
               'train loss', train_loss
+        with open('model.pkl', 'w') as fout:
+            pkl.dump(model, fout)
+        print '.... model saved'
 
     return model
 
@@ -98,7 +104,7 @@ def parse_args():
                         default=784,
                         help='Number of input features')
     parser.add_argument('--num_layers', type=int,
-                        default=5,
+                        default=2,
                         help='Number of layers of MLP')
     parser.add_argument('--out_size', type=int,
                         default=10,
@@ -115,6 +121,8 @@ def parse_args():
     parser.add_argument('--n_hiddens', type=int,
                         default=500,
                         help='Number of hidden units')
+    parser.add_argument('--model_file',
+                        help='Model file')
 
     return parser.parse_args()
 
