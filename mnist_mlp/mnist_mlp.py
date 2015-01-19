@@ -21,8 +21,19 @@ def sigma(x):
     return 1. / (1. + np.exp(-x))
 
 
+def sigma_grad(y):
+    return y * (1. - y)
+
+
 def softmax(x):
-    return np.exp(x) / np.sum(np.exp(x), axis=0)
+    return np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True)
+
+
+def softmax_grad(y):
+    m, n = y.shape
+    delta = np.zeros((m, n, n))
+    delta[:, xrange(n), xrange(n)] = 1.
+    return y[:, :, None] * (delta - y[:, None, :])
 
 
 def pairwise(iterable):
@@ -86,13 +97,26 @@ def forward_prop(batch, model):
     hidden = batch
     values = []
     for W, b in model[:-1]:
-        value = W.dot(hidden.T) + b
-        hidden = sigma(value).T
+        value = hidden.dot(W.T) + b.T
+        hidden = sigma(value)
         values += [value.copy()]
     V, c = model[-1]
-    outputs = softmax(V.dot(hidden.T) + c)
-    values += [outputs.copy()]
+    val = hidden.dot(V.T) + c.T
+    outputs = softmax(val)
+    values += [val.copy()]
     return outputs, values
+
+
+def backprop_step(dEdY, W, gd, Y, X):
+    deltas = (gd(Y) * dEdY)
+    dEdX = deltas.dot(W)
+    dEdW = deltas.T.dot(X) / deltas.shape[0]
+    dEdb = deltas.mean(axis=0)
+    return dEdX, dEdW, dEdb
+
+
+def compute_loss(labels, outputs):
+    return (-labels * np.log(outputs)).sum(axis=1).mean()
 
 
 def backward_prop(data, labels, model, values, outputs):
@@ -103,37 +127,22 @@ def backward_prop(data, labels, model, values, outputs):
     :param model: Model as described in `train`
     :param values: Hidden variable values from forward propagation
     :param outputs: Outputs from forward propagation
-    :return: Loss and all derivatives
+    :return: All derivatives
     """
-    diffs = []
-    loss = (labels * outputs.T).sum()
-
     # matrix (batch_index, output_index)
-    err = -labels * (1. / outputs)
-
-    # tensor (batch, output, output2)
-    err = err * (outputs[:, :, None] - outputs[:, :, None]
-                 * (outputs[:, None, :]))
-    err = err.sum(axis=1)
-    c_diff = err.sum(axis=0)
-    v_diff = (err[:, :, None] * values[-1][:, None, :]).sum(axis=0)
-    diffs += [(v_diff, c_diff)]
-
-    err = (err[:, :, None] * model[-1][0][None, :, :]).sum(axis=1)
-
+    err = ((-labels * (1. / outputs))[:, :, None] *
+           softmax_grad(outputs)).sum(axis=1)
+    err, w_diff, b_diff = backprop_step(err, model[-1][0],
+                                        lambda x: np.ones_like(x),
+                                        values[-1], values[-2])
+    diffs = [(w_diff.copy(), b_diff.copy())]
+    values = [data] + values
     for i, (W, b) in enumerate(reversed(model[:-1])):
-        val = values[-i - 1]
-        if i + 2 <= len(values):
-            prev_val = values[-i - 2]
-        else:
-            prev_val = data
-        err = (err * val * (np.ones_like(val) - val))
-        w_diff = (err[:, :, None] * prev_val[:, None, :]).sum(axis=0)
-        b_diff = err.sum(axis=1)
-        diffs += [(w_diff, b_diff)]
-        err = (err[:, :, None] * W[None, :, :]).sum(axis=1)
+        err, w_diff, b_diff = backprop_step(err, W, sigma_grad,
+                                            values[-i-2], values[-i-3])
+        diffs += [(w_diff.copy(), b_diff.copy())]
 
-    return loss, reversed(diffs)
+    return [x for x in reversed(diffs)]
 
 
 def one_hot(data, out_size):
