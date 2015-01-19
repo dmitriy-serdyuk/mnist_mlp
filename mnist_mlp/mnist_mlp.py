@@ -158,7 +158,7 @@ def parse_args():
                         default=500,
                         help='Number of hidden units')
     parser.add_argument('--model_file', default=argparse.SUPPRESS,
-                        help='Model file')
+                        help='Model file to continue training')
 
     return parser.parse_args()
 

@@ -1,3 +1,5 @@
+An MLP implementation using python and numpy.
+
 usage: mnist_mlp.py [-h] [--filename FILENAME] [--num_feat NUM_FEAT]
                     [--num_layers NUM_LAYERS] [--out_size OUT_SIZE]
                     [--batch_size BATCH_SIZE] [--n_epochs N_EPOCHS]
