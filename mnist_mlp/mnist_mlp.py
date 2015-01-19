@@ -27,8 +27,8 @@ def main(filename, out_size, batch_size, **kwargs):
     test_feats, test_labels = test_data
 
     rng = np.random.RandomState(1)
-    model = train(train_feats, train_labels, valid_feats, valid_labels, rng=rng,
-                  **kwargs)
+    model = train(train_feats, train_labels, valid_feats, valid_labels,
+                  rng=rng, out_size=out_size, **kwargs)
     with open('model.pkl', 'w') as fout:
         pkl.dump(model, fout)
 
@@ -36,9 +36,33 @@ def main(filename, out_size, batch_size, **kwargs):
     print '.. testing error', loss, 'misclassification', misclass
 
 
+def get_model(num_feat, out_size, n_hiddens, num_layers, rng=None, **kwargs):
+    """
+    Initializes of loads a model
+
+    :param num_layers: Number of layer of MLP
+    :param n_hiddens: Number of hidden units in each layer of MLP
+    :param rng: Random number generator
+    :param num_feats: Number of input features
+    :param out_size: Output layer size
+    :return: Model
+    """
+    if rng is None:
+        rng = np.random.RandomState(1)
+    if 'model_file' in kwargs:
+        print '.. loading model'
+        with open(kwargs['model_file'], 'r') as fin:
+            model = pkl.load(fin)
+    else:
+        print '.. model initialization'
+        model = init_model(num_feat, [n_hiddens] * num_layers, out_size,
+                           rng=rng)
+    return model
+
+
 @timing
 def train(feats, labels, valid_data, valid_labels, n_epochs,
-          learn_rate, num_layers, n_hiddens, rng, **kwargs):
+          learn_rate, **kwargs):
     """
     Trains model, saves it into `model.pkl` every epoch.
 
@@ -48,26 +72,12 @@ def train(feats, labels, valid_data, valid_labels, n_epochs,
     :param valid_labels: Validation labels
     :param n_epochs: Number of epochs to train
     :param learn_rate: Learning rate
-    :param num_layers: Number of layer of MLP
-    :param n_hiddens: Number of hidden units in each layer of MLP
-    :param rng: Random number generator
     :param kwargs: Other parameters:
            `model_file`: if passed, loads model from the file
     :return: Trained model, list of pairs (W, b) weight matrix W and bias b
              for each layer
     """
-    inp_size = feats.shape[2]
-    out_size = labels.shape[2]
-    if rng is None:
-        rng = np.random.RandomState(1)
-    if 'model_file' in kwargs:
-        print '.. loading model'
-        with open(kwargs['model_file'], 'r') as fin:
-            model = pkl.load(fin)
-    else:
-        print '.. model initialization'
-        model = init_model(inp_size, [n_hiddens] * num_layers, out_size,
-                           rng=rng)
+    model = get_model(**kwargs)
 
     print '.. starting training'
     for epoch in xrange(n_epochs):
@@ -147,7 +157,7 @@ def parse_args():
     parser.add_argument('--n_hiddens', type=int,
                         default=500,
                         help='Number of hidden units')
-    parser.add_argument('--model_file',
+    parser.add_argument('--model_file', default=argparse.SUPPRESS,
                         help='Model file')
 
     return parser.parse_args()
