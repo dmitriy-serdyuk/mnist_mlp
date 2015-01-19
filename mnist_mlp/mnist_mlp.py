@@ -45,7 +45,8 @@ def pairwise(iterable):
     return izip(a, b)
 
 
-def main(filename, num_feat, num_layers, out_size, batch_size, **kwargs):
+def main(filename, num_feat, num_layers, out_size, batch_size, n_epochs,
+         **kwargs):
     train_data, valid_data, test_data = load_data(filename, out_size,
                                                   batch_size)
 
@@ -55,11 +56,12 @@ def main(filename, num_feat, num_layers, out_size, batch_size, **kwargs):
 
     rng = np.random.RandomState(1)
     model = train(train_data, train_labels, valid_data, valid_labels,
-                  10, 1e-2, rng, num_feat=num_feat, num_layers=num_layers)
+                  n_epochs, 1e-2, rng, num_feat=num_feat, num_layers=num_layers)
     with open('model.pkl', 'w') as fout:
         pkl.dump(model, fout)
 
-    print '.. testing error', test(test_data, test_labels, model)
+    loss, misclass = test(test_data, test_labels, model)
+    print '.. testing error', loss, 'misclassification', misclass
 
 
 @timing
@@ -102,6 +104,10 @@ def train(data, labels, valid_data, valid_labels, n_epochs,
     return model
 
 
+def compute_misclass(label, outputs):
+    return (np.argmax(label, axis=1) == np.argmax(outputs, axis=1)).sum()
+
+
 def test(data, labels, model, **kwargs):
     """
     Computes testing error
@@ -111,11 +117,14 @@ def test(data, labels, model, **kwargs):
     :return: testing error
     """
     test_loss = 0.
+    test_misclass = 0.
     for batch, label in zip(data, labels):
         outputs, _ = forward_prop(batch, model)
         test_loss += compute_loss(label, outputs)
+        test_misclass += compute_misclass(label, outputs)
     test_loss /= data.shape[0]
-    return test_loss
+    test_misclass /= data.shape[0] * data.shape[1]
+    return test_loss, test_misclass
 
 
 def init_model(num_feat, layer_sizes, num_out, rng=None, seed=1):
@@ -231,6 +240,9 @@ def parse_args():
     parser.add_argument('--batch_size', type=int,
                         default=50,
                         help='Size of batch')
+    parser.add_argument('--n_epochs', type=int,
+                        default=50,
+                        help='Number of epochs')
     return parser.parse_args()
 
 if __name__ == '__main__':
