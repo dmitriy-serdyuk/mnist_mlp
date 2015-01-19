@@ -57,7 +57,7 @@ def main(filename, num_feat, num_layers, out_size, batch_size, **kwargs):
     model = train(train_data, train_labels, valid_data, valid_labels,
                   10, 1e-2, rng, num_feat=num_feat, num_layers=num_layers)
     with open('model.pkl', 'w') as fout:
-        pkl.dump(fout, model)
+        pkl.dump(model, fout)
 
     print '.. testing error', test(test_data, test_labels, model)
 
@@ -96,8 +96,8 @@ def train(data, labels, valid_data, valid_labels, n_epochs,
             outputs, _ = forward_prop(batch, model)
             valid_loss += compute_loss(label, outputs)
         valid_loss /= valid_data.shape[0]
-        print ('.... epoch', epoch, 'validation loss', valid_loss,
-               'train loss', train_loss)
+        print '.... epoch', epoch, 'validation loss', valid_loss, \
+              'train loss', train_loss
 
     return model
 
