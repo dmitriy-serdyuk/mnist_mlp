@@ -67,17 +67,18 @@ def test_backprop_batch():
     label[:, 0] = 1.
 
     ans = backward_prop(batch, label, model, hiddens, output)
-    assert ans[0][0].shape == (batch_size,)
+    assert ans[0][0].shape == (3, 5)
 
 
-def test_gradients_v():
-    """Test gradients for V"""
+def test_gradients():
+    """Test gradients"""
     delta = 1e-5
     batch_size = 4
     inp_size = 5
     out_size = 10
-    batch = np.random.normal(0, 0.1, (batch_size, inp_size))
-    model = init_model(inp_size, [3, 2], out_size)
+    rng = np.random.RandomState(1)
+    batch = rng.normal(0, 0.1, (batch_size, inp_size))
+    model = init_model(inp_size, [3, 2], out_size, rng=rng)
     output, hiddens = forward_prop(batch, model)
 
     label = np.zeros((batch_size, out_size))
@@ -85,54 +86,30 @@ def test_gradients_v():
 
     grads = backward_prop(batch, label, model, hiddens, output)
 
-    shape = model[-1][0].shape
-    num_grad = np.zeros(shape)
-    m, n = shape
-    for i in xrange(m):
-        for j in xrange(n):
-            outputs, _ = forward_prop(batch, model)
-            loss = compute_loss(label, outputs)
+    outputs, _ = forward_prop(batch, model)
+    loss = compute_loss(label, outputs)
+    for grs, (W, b) in zip(grads, model):
+        shape_w = W.shape
+        num_grad_w = np.zeros(shape_w)
+        num_grad_b = np.zeros(b.shape)
+        m, n = shape_w
+        for i in xrange(m):
+            for j in xrange(n):
 
-            model[-1][0][i, j] += delta
+                W[i, j] += delta
+                outputs_plus, _ = forward_prop(batch, model)
+                loss_plus = compute_loss(label, outputs_plus)
+
+                W[i, j] -= delta
+                num_grad_w[i, j] = (loss_plus - loss) / delta
+
+            b[i, 0] += delta
             outputs_plus, _ = forward_prop(batch, model)
             loss_plus = compute_loss(label, outputs_plus)
 
-            model[-1][0][i, j] -= delta
-            num_grad[i, j] = (loss_plus - loss) / delta
+            b[i, 0] -= delta
+            num_grad_b[i, 0] = (loss_plus - loss) / delta
 
-    print grads[-1][0], num_grad
-    np.testing.assert_allclose(grads[-1][0], num_grad, atol=1e-5)
+        np.testing.assert_allclose(grs[0], num_grad_w, atol=1e-5)
+        np.testing.assert_allclose(grs[1], num_grad_b, atol=1e-5)
 
-
-def test_gradients_c():
-    """Test gradients for c"""
-    delta = 1e-5
-    batch_size = 4
-    inp_size = 5
-    out_size = 10
-    batch = np.random.normal(0, 0.1, (batch_size, inp_size))
-    model = init_model(inp_size, [3, 2], out_size)
-    output, hiddens = forward_prop(batch, model)
-
-    label = np.zeros((batch_size, out_size))
-    label[:, 0] = 1.
-
-    grads = backward_prop(batch, label, model, hiddens, output)
-
-    V = model[-1][0]
-    diffs = np.zeros_like(V)
-    for i in xrange(V.shape[0]):
-        for j in xrange(V.shape[1]):
-            outputs1, _ = forward_prop(batch, model)
-            V[i, j] += delta
-            model[-1][0] = V
-            outputs2, _ = forward_prop(batch, model)
-            V[i, j] -= delta
-            model[-1][0] = V
-            diffs[i, j] = (outputs2 - outputs1) / delta
-
-    np.testing.assert_allclose(grads, diffs)
-
-
-if __name__ == '__main__':
-    test_backprop()
