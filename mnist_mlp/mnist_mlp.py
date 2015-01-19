@@ -1,16 +1,18 @@
 __author__ = 'serdyuk'
 
-import numpy as np
 from itertools import tee, izip
 import cPickle as pkl
 import argparse
 import time
+import gzip
+
+import numpy as np
 
 
 def timing(f):
-    def wrap(*args):
+    def wrap(*args, **kwargs):
         time1 = time.time()
-        ret = f(*args)
+        ret = f(*args, **kwargs)
         time2 = time.time()
         print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
         return ret
@@ -43,17 +45,25 @@ def pairwise(iterable):
     return izip(a, b)
 
 
-def main(filename, num_feat, num_layers, **kwargs):
-    train_data, valid_data, test_data = load_data(filename)
+def main(filename, num_feat, num_layers, out_size, batch_size, **kwargs):
+    train_data, valid_data, test_data = load_data(filename, out_size,
+                                                  batch_size)
 
-    data, labels = train_data
+    train_data, train_labels = train_data
+    valid_data, valid_labels = valid_data
+    test_data, test_labels = test_data
 
-    model = train(data, labels, num_feat=num_feat, num_layers=num_layers)
-    print test(data, labels, model)
+    rng = np.random.RandomState(1)
+    model = train(train_data, train_labels, valid_data, valid_labels,
+                  10, 1e-2, rng, num_feat=num_feat, num_layers=num_layers)
+    with open('model.pkl', 'w') as fout:
+        pkl.dump(fout, model)
+    print test(test_data, test_labels, model)
 
 
 @timing
-def train(data, labels, **kwargs):
+def train(data, labels, valid_data, valid_labels, n_epochs,
+          learn_rate, rng, **kwargs):
     """
     Trains model
     :param data: Training data
@@ -61,7 +71,34 @@ def train(data, labels, **kwargs):
     :return: Trained model, list of pairs (W, b) weight matrix W and bias b
              for each layer
     """
-    pass
+    inp_size = data.shape[2]
+    out_size = labels.shape[2]
+    if rng is None:
+        rng = np.random.RandomState(1)
+    print '.. model initialization'
+    model = init_model(inp_size, [50] * kwargs['num_layers'], out_size,
+                       rng=rng)
+
+    print '.. starting training'
+    for epoch in xrange(n_epochs):
+        train_loss = 0.
+        for batch, label in zip(data, labels):
+            outputs, hiddens = forward_prop(batch, model)
+            grads = backward_prop(batch, label, model, hiddens, outputs)
+            train_loss += compute_loss(label, outputs)
+            for (W, b), (grad_w, grad_b) in zip(model, grads):
+                W -= learn_rate * grad_w
+                b -= learn_rate * grad_b
+        train_loss /= data.shape[0]
+        valid_loss = 0.
+        for batch, label in zip(valid_data, valid_labels):
+            outputs, _ = forward_prop(batch, model)
+            valid_loss += compute_loss(label, outputs)
+        valid_loss /= valid_data.shape[0]
+        print ('.... epoch', epoch, 'validation loss', valid_loss,
+               'train loss', train_loss)
+
+    return model
 
 
 def test(data, labels, model, **kwargs):
@@ -120,13 +157,13 @@ def compute_loss(labels, outputs):
     return (-labels * np.log(outputs)).sum(axis=1).mean()
 
 
-def backward_prop(data, labels, model, values, outputs):
+def backward_prop(data, labels, model, hiddens, outputs):
     """
     Performs backprop
     :param data: Batch of data (batch_index, data_index)
     :param labels: Labels for batch of data
     :param model: Model as described in `train`
-    :param values: Hidden variable values from forward propagation
+    :param hiddens: Hidden variable values from forward propagation
     :param outputs: Outputs from forward propagation
     :return: All derivatives
     """
@@ -135,12 +172,12 @@ def backward_prop(data, labels, model, values, outputs):
            softmax_grad(outputs)).sum(axis=1)
     err, w_diff, b_diff = backprop_step(err, model[-1][0],
                                         lambda x: np.ones_like(x),
-                                        values[-1], values[-2])
+                                        hiddens[-1], hiddens[-2])
     diffs = [(w_diff.copy(), b_diff.copy())]
-    values = [data] + values
+    hiddens = [data] + hiddens
     for i, (W, b) in enumerate(reversed(model[:-1])):
         err, w_diff, b_diff = backprop_step(err, W, sigma_grad,
-                                            values[-i-2], values[-i-3])
+                                            hiddens[-i-2], hiddens[-i-3])
         diffs += [(w_diff.copy(), b_diff.copy())]
 
     return [x for x in reversed(diffs)]
@@ -152,31 +189,42 @@ def one_hot(data, out_size):
     return out
 
 
-def load_data(filename, out_size):
+def divide_by_batch(data, labels, batch_size):
+    in_size = data.shape[1]
+    out_size = labels.shape[1]
+    return (data.reshape((-1, batch_size, in_size)),
+            labels.reshape(-1, batch_size, out_size))
+
+
+def load_data(filename, out_size, batch_size):
     datasets = []
-    with open(filename, 'r') as fin:
+    with gzip.open(filename, 'r') as fin:
         data = pkl.load(fin)
     for dataset in data:
         features, labels = dataset
-        datasets += [[features, one_hot(labels, out_size)]]
-
+        datasets += [divide_by_batch(features,
+                                      one_hot(labels, out_size),
+                                      batch_size)]
     return datasets
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run MLP on MNIST')
-    parser.add_argument('filename',
-                        default='/data/lisa/data/mnist/mnist.pkl',
+    parser.add_argument('--filename',
+                        default='/data/lisa/data/mnist/mnist.pkl.gz',
                         help='File which contains pickled dataset')
-    parser.add_argument('num_feat', type=int,
+    parser.add_argument('--num_feat', type=int,
                         default=784,
                         help='Number of input features')
-    parser.add_argument('num_layers', type=int,
+    parser.add_argument('--num_layers', type=int,
                         default=5,
                         help='Number of layers of MLP')
-    parser.add_argument('out_size', type=int,
+    parser.add_argument('--out_size', type=int,
                         default=10,
                         help='Size of output layer')
+    parser.add_argument('--batch_size', type=int,
+                        default=50,
+                        help='Size of batch')
     return parser.parse_args()
 
 if __name__ == '__main__':
