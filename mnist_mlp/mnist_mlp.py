@@ -58,7 +58,8 @@ def main(filename, num_feat, num_layers, out_size, batch_size, **kwargs):
                   10, 1e-2, rng, num_feat=num_feat, num_layers=num_layers)
     with open('model.pkl', 'w') as fout:
         pkl.dump(fout, model)
-    print test(test_data, test_labels, model)
+
+    print '.. testing error', test(test_data, test_labels, model)
 
 
 @timing
@@ -109,7 +110,12 @@ def test(data, labels, model, **kwargs):
     :param model: Trained model as described in function `train`
     :return: testing error
     """
-    pass
+    test_loss = 0.
+    for batch, label in zip(data, labels):
+        outputs, _ = forward_prop(batch, model)
+        test_loss += compute_loss(label, outputs)
+    test_loss /= data.shape[0]
+    return test_loss
 
 
 def init_model(num_feat, layer_sizes, num_out, rng=None, seed=1):
